@@ -1,0 +1,24 @@
+# Build directory
+build/
+
+# Cache HTTP cree par abls-agent-libs
+http_cache/
+
+# CMake artefacts
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Compiled objects and binaries
+*.o
+*.a
+*.so
+*.so.*
+abls-agent-ups
+
+# Editor
+*.swp
+*.swo
+*~
+.DS_Store

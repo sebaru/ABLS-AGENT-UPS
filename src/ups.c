@@ -1,0 +1,374 @@
+/******************************************************************************************************************************/
+/* ABLS-AGENT-UPS/src/ups.c                Gestion des onduleurs via le protocole NUT                                         */
+/* Projet Abls-Habitat                   Gestion d'habitat                                                03.09.2026 09:00:00 */
+/* Auteur: LEFEVRE Sebastien                                                                                                  */
+/******************************************************************************************************************************/
+/*
+ * ups.c
+ * This file is part of Abls-Habitat
+ *
+ * Copyright (C) 1988-2026 - Sebastien LEFEVRE
+ *
+ * ABLS-AGENT-UPS is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * ABLS-AGENT-UPS is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with ABLS-AGENT-UPS; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin St, Fifth Floor,
+ * Boston, MA  02110-1301  USA
+ */
+
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <time.h>
+
+ #include "ups.h"
+
+/******************************************************************************************************************************/
+/* Ups_create_mnemos: Cree les mnemoniques de l'agent                                                                         */
+/* Entrée: l'agent                                                                                                            */
+/* Sortie: néant                                                                                                              */
+/******************************************************************************************************************************/
+ static void Ups_create_mnemos ( struct ABLS_AGENT *agent )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+
+    vars->Outlet_1_status  = Mnemo_create_DI ( agent, "OUTLET_1_STATUS",  "Statut de la prise n°1" );
+    vars->Outlet_2_status  = Mnemo_create_DI ( agent, "OUTLET_2_STATUS",  "Statut de la prise n°2" );
+    vars->Ups_online       = Mnemo_create_DI ( agent, "UPS_ONLINE",       "UPS Online" );
+    vars->Ups_charging     = Mnemo_create_DI ( agent, "UPS_CHARGING",     "UPS en charge" );
+    vars->Ups_on_batt      = Mnemo_create_DI ( agent, "UPS_ON_BATT",      "UPS sur batterie" );
+    vars->Ups_replace_batt = Mnemo_create_DI ( agent, "UPS_REPLACE_BATT", "Batteries UPS à changer" );
+    vars->Ups_alarm        = Mnemo_create_DI ( agent, "UPS_ALARM",        "UPS en alarme !" );
+
+    vars->Load             = Mnemo_create_AI ( agent, "LOAD",            "Charge onduleur", "%", AGENT_ARCHIVE_1_MIN );
+    vars->Realpower        = Mnemo_create_AI ( agent, "REALPOWER",       "Puissance active", "W", AGENT_ARCHIVE_1_MIN );
+    vars->Battery_charge   = Mnemo_create_AI ( agent, "BATTERY_CHARGE",  "Charge batterie", "%", AGENT_ARCHIVE_1_MIN );
+    vars->Input_voltage    = Mnemo_create_AI ( agent, "INPUT_VOLTAGE",   "Tension d'entrée", "V", AGENT_ARCHIVE_5_MIN );
+    vars->Battery_runtime  = Mnemo_create_AI ( agent, "BATTERY_RUNTIME", "Durée de batterie restante", "s", AGENT_ARCHIVE_1_MIN );
+    vars->Battery_voltage  = Mnemo_create_AI ( agent, "BATTERY_VOLTAGE", "Tension batterie", "V", AGENT_ARCHIVE_1_MIN );
+    vars->Input_hz         = Mnemo_create_AI ( agent, "INPUT_HZ",        "Fréquence d'entrée", "Hz", AGENT_ARCHIVE_5_MIN );
+    vars->Output_current   = Mnemo_create_AI ( agent, "OUTPUT_CURRENT",  "Courant de sortie", "A", AGENT_ARCHIVE_1_MIN );
+    vars->Output_hz        = Mnemo_create_AI ( agent, "OUTPUT_HZ",       "Fréquence de sortie", "Hz", AGENT_ARCHIVE_5_MIN );
+    vars->Output_voltage   = Mnemo_create_AI ( agent, "OUTPUT_VOLTAGE",  "Tension de sortie", "V", AGENT_ARCHIVE_5_MIN );
+
+    Mnemo_create_DO ( agent, "LOAD_OFF",        "Coupe la sortie ondulée", TRUE );
+    Mnemo_create_DO ( agent, "LOAD_ON",         "Active la sortie ondulée", TRUE );
+    Mnemo_create_DO ( agent, "OUTLET_1_OFF",    "Désactive la prise n°1", TRUE );
+    Mnemo_create_DO ( agent, "OUTLET_1_ON",     "Active la prise n°1", TRUE );
+    Mnemo_create_DO ( agent, "OUTLET_2_OFF",    "Désactive la prise n°2", TRUE );
+    Mnemo_create_DO ( agent, "OUTLET_2_ON",     "Active la prise n°2", TRUE );
+    Mnemo_create_DO ( agent, "START_DEEP_BAT",  "Active un test de décharge profond", TRUE );
+    Mnemo_create_DO ( agent, "START_QUICK_BAT", "Active un test de décharge léger", TRUE );
+    Mnemo_create_DO ( agent, "STOP_TEST_BAT",   "Stop le test de décharge batterie", TRUE );
+  }
+/******************************************************************************************************************************/
+/* Ups_disconnect: Deconnexion du serveur upsd                                                                                */
+/* Entrée: l'agent                                                                                                            */
+/* Sortie: néant                                                                                                              */
+/******************************************************************************************************************************/
+ static void Ups_disconnect ( struct ABLS_AGENT *agent )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+
+    if (vars->started)
+     { upscli_disconnect( &vars->upsconn );
+       vars->started = FALSE;
+     }
+
+    Mqtt_Send_AI ( agent, vars->Load,            0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Realpower,       0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Battery_charge,  0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Input_voltage,   0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Battery_runtime, 0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Battery_voltage, 0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Input_hz,        0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Output_current,  0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Output_hz,       0.0, FALSE );
+    Mqtt_Send_AI ( agent, vars->Output_voltage,  0.0, FALSE );
+
+    Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_NOTICE, "Disconnected from upsd" );
+    Agent_send_comm_to_master ( agent, FALSE );
+  }
+/******************************************************************************************************************************/
+/* Ups_dialog: Envoi une ligne au serveur upsd et récupère sa réponse dans le même buffer                                     */
+/* Entrée: l'agent, le buffer et sa taille                                                                                    */
+/* Sortie: TRUE si l'échange a abouti                                                                                         */
+/******************************************************************************************************************************/
+ static gboolean Ups_dialog ( struct ABLS_AGENT *agent, gchar *buffer, gsize size )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+
+    if ( upscli_sendline( &vars->upsconn, buffer, strlen(buffer) ) == -1 ) return(FALSE);
+    if ( upscli_readline( &vars->upsconn, buffer, size ) == -1 ) return(FALSE);
+    return(TRUE);
+  }
+/******************************************************************************************************************************/
+/* Ups_connect: Tentative de connexion au serveur upsd                                                                        */
+/* Entrée: l'agent                                                                                                            */
+/* Sortie: TRUE si la connexion a abouti                                                                                      */
+/******************************************************************************************************************************/
+ static gboolean Ups_connect ( struct ABLS_AGENT *agent )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+    gchar buffer[128];
+
+    gchar *host           = Agent_config_get_string ( agent, "host" );
+    gchar *name           = Agent_config_get_string ( agent, "name" );
+    gchar *admin_username = Agent_config_get_string ( agent, "admin_username" );
+    gchar *admin_password = Agent_config_get_string ( agent, "admin_password" );
+
+    if ( upscli_connect( &vars->upsconn, host, UPS_PORT_TCP, UPSCLI_CONN_TRYSSL ) == -1 )
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING,
+             "Connexion refused by upsd (host='%s' -> %s)", host, (char *)upscli_strerror(&vars->upsconn) );
+       return(FALSE);
+     }
+
+    vars->started = TRUE;
+
+    g_snprintf( buffer, sizeof(buffer), "GET UPSDESC %s\n", name );
+    if (!Ups_dialog ( agent, buffer, sizeof(buffer) ))
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING,
+             "GET UPSDESC failed (%s)", (char *)upscli_strerror(&vars->upsconn) );
+     }
+    else
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_DEBUG, "GET UPSDESC -> %s", buffer ); }
+
+    if (admin_username && *admin_username)
+     { g_snprintf( buffer, sizeof(buffer), "USERNAME %s\n", admin_username );
+       if (!Ups_dialog ( agent, buffer, sizeof(buffer) ))
+        { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING,
+                "USERNAME failed (%s)", (char *)upscli_strerror(&vars->upsconn) );
+        }
+     }
+
+    if (admin_password && *admin_password)
+     { g_snprintf( buffer, sizeof(buffer), "PASSWORD %s\n", admin_password );
+       if (!Ups_dialog ( agent, buffer, sizeof(buffer) ))
+        { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING,
+                "PASSWORD failed (%s)", (char *)upscli_strerror(&vars->upsconn) );
+        }
+     }
+
+    Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_NOTICE, "Connected (host='%s', name='%s')", host, name );
+    return(TRUE);
+  }
+/******************************************************************************************************************************/
+/* Ups_set_instcmd: Envoi d'une commande instantanée à l'onduleur                                                             */
+/* Entrée: l'agent, le nom de la commande                                                                                     */
+/* Sortie: néant                                                                                                              */
+/******************************************************************************************************************************/
+ static void Ups_set_instcmd ( struct ABLS_AGENT *agent, gchar *nom_cmd )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+    gchar buffer[128];
+
+    if (!vars->started) return;
+
+    gchar *name = Agent_config_get_string ( agent, "name" );
+
+    g_snprintf( buffer, sizeof(buffer), "INSTCMD %s %s\n", name, nom_cmd );
+    if (!Ups_dialog ( agent, buffer, sizeof(buffer) ))
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING,
+             "INSTCMD '%s' failed (%s)", nom_cmd, (char *)upscli_strerror(&vars->upsconn) );
+       Ups_disconnect ( agent );
+       return;
+     }
+    Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_NOTICE, "INSTCMD '%s' -> %s", nom_cmd, buffer );
+  }
+/******************************************************************************************************************************/
+/* Ups_get_var: Recupere la valeur d'une variable NUT                                                                         */
+/* Entrée: l'agent, le nom de la variable                                                                                     */
+/* Sortie: la valeur sans ses guillemets, NULL si erreur                                                                      */
+/******************************************************************************************************************************/
+ static gchar *Ups_get_var ( struct ABLS_AGENT *agent, gchar *nom_var )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+    static gchar buffer[128];
+
+    if (!vars->started) return(NULL);
+
+    gchar *name = Agent_config_get_string ( agent, "name" );
+
+    g_snprintf( buffer, sizeof(buffer), "GET VAR %s %s\n", name, nom_var );
+    if (!Ups_dialog ( agent, buffer, sizeof(buffer) ))
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING,
+             "GET VAR '%s' failed (%s)", nom_var, (char *)upscli_strerror(&vars->upsconn) );
+       Ups_disconnect ( agent );
+       return(NULL);
+     }
+
+    if ( !strncmp ( buffer, "ERR", 3 ) )                                             /* Detection des erreurs type DATA-STALE */
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_DEBUG, "GET VAR '%s' -> %s", nom_var, buffer );
+       return(NULL);
+     }
+
+    if ( strncmp ( buffer, "VAR", 3 ) ) return(NULL);        /* VAR NOT SUPPORTED / DRIVER NOT CONNECTED ne sont pas fatals */
+
+    gchar *debut = strchr ( buffer, '"' );                    /* La valeur est le dernier champ, encadré par des guillemets */
+    if (!debut) return(NULL);
+    debut++;
+
+    gchar *fin = strrchr ( debut, '"' );
+    if (fin) *fin = '\0';
+
+    Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_DEBUG, "GET VAR '%s' -> '%s'", nom_var, debut );
+    return(debut);
+  }
+/******************************************************************************************************************************/
+/* Ups_interroger: Interrogation de l'onduleur                                                                                */
+/* Entrée: l'agent                                                                                                            */
+/* Sortie: néant                                                                                                              */
+/******************************************************************************************************************************/
+ static void Ups_interroger ( struct ABLS_AGENT *agent )
+  { struct ABLS_UPS_VARS *vars = agent->vars;
+    gchar *reponse;
+
+    if ( (reponse = Ups_get_var ( agent, "ups.load" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Load, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "ups.realpower" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Realpower, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "battery.charge" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Battery_charge, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "input.voltage" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Input_voltage, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "battery.runtime" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Battery_runtime, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "battery.voltage" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Battery_voltage, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "input.frequency" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Input_hz, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "output.current" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Output_current, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "output.frequency" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Output_hz, atof(reponse), TRUE ); }
+
+    if ( (reponse = Ups_get_var ( agent, "output.voltage" )) != NULL )
+     { Mqtt_Send_AI ( agent, vars->Output_voltage, atof(reponse), TRUE ); }
+
+/*---------------------------------------------- Récupération des entrées TOR de l'UPS ---------------------------------------*/
+    if ( (reponse = Ups_get_var ( agent, "outlet.1.status" )) != NULL )
+     { Mqtt_Send_DI ( agent, vars->Outlet_1_status, !strcasecmp(reponse, "on") ); }
+
+    if ( (reponse = Ups_get_var ( agent, "outlet.2.status" )) != NULL )
+     { Mqtt_Send_DI ( agent, vars->Outlet_2_status, !strcasecmp(reponse, "on") ); }
+
+    if ( (reponse = Ups_get_var ( agent, "ups.status" )) != NULL )
+     { Mqtt_Send_DI ( agent, vars->Ups_online,       (g_strrstr(reponse, "OL")?TRUE:FALSE) );
+       Mqtt_Send_DI ( agent, vars->Ups_charging,     (g_strrstr(reponse, "DISCHRG")?FALSE:TRUE) );
+       Mqtt_Send_DI ( agent, vars->Ups_on_batt,      (g_strrstr(reponse, "OB")?TRUE:FALSE) );
+       Mqtt_Send_DI ( agent, vars->Ups_replace_batt, (g_strrstr(reponse, "RB")?TRUE:FALSE) );
+       Mqtt_Send_DI ( agent, vars->Ups_alarm,        (g_strrstr(reponse, "ALARM")?TRUE:FALSE) );
+       Agent_send_comm_to_master ( agent, TRUE );
+     }
+    else Agent_send_comm_to_master ( agent, FALSE );
+  }
+/******************************************************************************************************************************/
+/* Ups_SET_DO: Traite une demande de commande TOR en provenance du master                                                     */
+/* Entrée: l'agent et le message                                                                                              */
+/* Sortie: néant                                                                                                              */
+/******************************************************************************************************************************/
+ static void Ups_SET_DO ( struct ABLS_AGENT *agent, JsonNode *msg )
+  { gchar *agent_acronyme = Json_get_string ( msg, "mqtt_topic_lvl2" );
+    gchar *tech_id        = Json_get_string ( msg, "tech_id" );
+    gchar *acronyme       = Json_get_string ( msg, "acronyme" );
+
+    if (!agent_acronyme)
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_ERR, "Requete mal formée manque mqtt_topic_lvl2" );
+       return;
+     }
+
+    if (!Json_has_member ( msg, "etat" ))
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_ERR, "Requete mal formée manque etat" );
+       return;
+     }
+
+    gboolean etat = Json_get_bool ( msg, "etat" );
+    Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_NOTICE, "SET_DO '%s:%s'/'%s:%s'=%d",
+          agent->agent_tech_id, agent_acronyme, tech_id, acronyme, etat );
+
+    if (!etat) return;                                                    /* Les commandes onduleur sont des monostables */
+
+         if (!strcasecmp(agent_acronyme, "LOAD_OFF"))        Ups_set_instcmd ( agent, "load.off" );
+    else if (!strcasecmp(agent_acronyme, "LOAD_ON"))         Ups_set_instcmd ( agent, "load.on" );
+    else if (!strcasecmp(agent_acronyme, "OUTLET_1_OFF"))    Ups_set_instcmd ( agent, "outlet.1.load.off" );
+    else if (!strcasecmp(agent_acronyme, "OUTLET_1_ON"))     Ups_set_instcmd ( agent, "outlet.1.load.on" );
+    else if (!strcasecmp(agent_acronyme, "OUTLET_2_OFF"))    Ups_set_instcmd ( agent, "outlet.2.load.off" );
+    else if (!strcasecmp(agent_acronyme, "OUTLET_2_ON"))     Ups_set_instcmd ( agent, "outlet.2.load.on" );
+    else if (!strcasecmp(agent_acronyme, "START_DEEP_BAT"))  Ups_set_instcmd ( agent, "test.battery.start.deep" );
+    else if (!strcasecmp(agent_acronyme, "START_QUICK_BAT")) Ups_set_instcmd ( agent, "test.battery.start.quick" );
+    else if (!strcasecmp(agent_acronyme, "STOP_TEST_BAT"))   Ups_set_instcmd ( agent, "test.battery.stop" );
+    else Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_WARNING, "SET_DO '%s' inconnu", agent_acronyme );
+  }
+/******************************************************************************************************************************/
+/* main: Prend en charge l'agent onduleur                                                                                     */
+/* Entrée: les paramètres de la ligne de commande                                                                             */
+/* Sortie: néant                                                                                                              */
+/******************************************************************************************************************************/
+ gint main ( gint argc, gchar *argv[] )
+  { Config_add_parameter ( "host",           "HOST", "Adresse du serveur NUT",          CONFIG_STRING );
+    Config_add_parameter ( "name",           "NAME", "Nom de l'onduleur dans NUT",      CONFIG_STRING );
+    Config_add_parameter ( "admin-username", "USER", "Utilisateur d'administration NUT", CONFIG_STRING );
+    Config_add_parameter ( "admin-password", "PASS", "Mot de passe d'administration NUT", CONFIG_STRING );
+    struct ABLS_AGENT *agent = Agent_init ( argv[0], "ups", ABLS_AGENT_UPS_VERSION, sizeof(struct ABLS_UPS_VARS), argc, argv );
+    struct ABLS_UPS_VARS *vars = agent->vars;
+
+    if (!Agent_config_get_string ( agent, "host" ))
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_ERR, "ERROR: No host, stopping agent" );
+       Agent_end(agent);
+     }
+
+    if (!Agent_config_get_string ( agent, "name" ))
+     { Info( __func__, agent->agent_classe, agent->agent_tech_id, LOG_ERR, "ERROR: No name, stopping agent" );
+       Agent_end(agent);
+     }
+
+    Ups_create_mnemos ( agent );
+
+    Agent_is_ready ( agent );
+
+    while(agent->Agent_run == AGENT_IS_RUNNING)                                              /* On tourne tant que necessaire */
+     { Agent_loop ( agent );                                             /* Loop sur l'agent pour mettre a jour la telemetrie */
+/****************************************************** Ecoute du master ******************************************************/
+       JsonNode *mqtt_local_message;
+       while ( (mqtt_local_message = Agent_get_mqtt_local_message ( agent ) ) != NULL )
+        { if (Mqtt_topic_is ( mqtt_local_message, 2, "SET_DO", agent->agent_tech_id ))
+           { Ups_SET_DO ( agent, mqtt_local_message ); }
+          Json_unref ( mqtt_local_message );
+        }
+/****************************************************** Ecoute de l'api *******************************************************/
+       JsonNode *mqtt_api_message;
+       while ( (mqtt_api_message = Agent_get_mqtt_api_message ( agent ) ) != NULL )
+        { Json_unref ( mqtt_api_message ); }
+/****************************************************** Interrogation de l'ups ************************************************/
+       time_t now = time(NULL);
+       if (now >= vars->next_connexion)
+        { if (!vars->started)
+           { if (!Ups_connect ( agent ))
+              { Ups_disconnect ( agent );
+                Agent_set_status ( agent, "Serveur NUT injoignable" );
+                vars->next_connexion = now + UPS_RETRY_SEC;
+              }
+           }
+          else
+           { Ups_interroger ( agent );
+             if (vars->started) Agent_set_status ( agent, "Onduleur interrogé" );
+             vars->next_connexion = now + UPS_POLLING_SEC;
+           }
+        }
+     }
+
+    Ups_disconnect ( agent );
+    Agent_end(agent);
+  }
+/*----------------------------------------------------------------------------------------------------------------------------*/
