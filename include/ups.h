@@ -25,41 +25,41 @@
  * Boston, MA  02110-1301  USA
  */
 
-#ifndef _ABLS_UPS_H_
-#define _ABLS_UPS_H_
+ #ifndef _ABLS_UPS_H_
+ #define _ABLS_UPS_H_
 
-#include <upsclient.h>
+ #include <upsclient.h>
 
-#include <abls-agent-libs/abls-agent-libs.h>
+ #include <abls-agent-libs/abls-agent-libs.h>
 
-#define UPS_PORT_TCP      3493                                                /* Port de connexion TCP pour accès au daemon */
-#define UPS_POLLING_SEC   10                                                     /* Interrogation nominale du serveur upsd */
-#define UPS_RETRY_SEC     180                                                /* Attente avant retry si connexion impossible */
+ #define UPS_PORT_TCP      3493                                                 /* Port de connexion TCP pour accès au daemon */
+ #define UPS_POLLING_SEC   10                                                       /* Interrogation nominale du serveur upsd */
+ #define UPS_RETRY_SEC     180                                                 /* Attente avant retry si connexion impossible */
 
-struct ABLS_UPS_VARS {
-  UPSCONN_t upsconn;                                                                            /* Connexion au serveur upsd */
-  gboolean started;
-  time_t next_connexion;
+struct ABLS_UPS_VARS
+ { UPSCONN_t upsconn;                                                                            /* Connexion au serveur upsd */
+   gboolean started;
+   time_t next_connexion;
 /************************************************************ Analog Input ****************************************************/
-  JsonNode *Load;
-  JsonNode *Realpower;
-  JsonNode *Battery_charge;
-  JsonNode *Input_voltage;
-  JsonNode *Battery_runtime;
-  JsonNode *Battery_voltage;
-  JsonNode *Input_hz;
-  JsonNode *Output_current;
-  JsonNode *Output_hz;
-  JsonNode *Output_voltage;
+   JsonNode *Load;
+   JsonNode *Realpower;
+   JsonNode *Battery_charge;
+   JsonNode *Input_voltage;
+   JsonNode *Battery_runtime;
+   JsonNode *Battery_voltage;
+   JsonNode *Input_hz;
+   JsonNode *Output_current;
+   JsonNode *Output_hz;
+   JsonNode *Output_voltage;
 /*********************************************************** Digital Input ****************************************************/
-  JsonNode *Outlet_1_status;
-  JsonNode *Outlet_2_status;
-  JsonNode *Ups_online;
-  JsonNode *Ups_charging;
-  JsonNode *Ups_on_batt;
-  JsonNode *Ups_replace_batt;
-  JsonNode *Ups_alarm;
-};
+   JsonNode *Outlet_1_status;
+   JsonNode *Outlet_2_status;
+   JsonNode *Ups_online;
+   JsonNode *Ups_charging;
+   JsonNode *Ups_on_batt;
+   JsonNode *Ups_replace_batt;
+   JsonNode *Ups_alarm;
+ };
 
-#endif /* _ABLS_UPS_H_ */
+ #endif /* _ABLS_UPS_H_ */
 /*----------------------------------------------------------------------------------------------------------------------------*/
