@@ -28,6 +28,7 @@
  #ifndef _ABLS_UPS_H_
  #define _ABLS_UPS_H_
 
+ #include <stdint.h>
  #include <upsclient.h>
 
  #include <abls-agent-libs/abls-agent-libs.h>
