@@ -342,7 +342,10 @@
 /****************************************************** Ecoute de l'api *******************************************************/
        JsonNode *mqtt_api_message;
        while ( (mqtt_api_message = Agent_get_mqtt_api_message ( Agent ) ) != NULL )
-        { Json_unref ( mqtt_api_message ); }
+        { if ( Mqtt_topic_is ( mqtt_api_message, 4, "+", "AGENT", Agent->agent_tech_id, "TEST" ) )
+           { Info(__func__, Agent->agent_classe, Agent->agent_tech_id, LOG_NOTICE, "Agent Test from API."); }
+          Json_unref (mqtt_api_message);
+        }
 /****************************************************** Interrogation de l'ups ************************************************/
        time_t now = time(NULL);
        if (now >= Agent_vars->next_connexion)
