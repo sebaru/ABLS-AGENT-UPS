@@ -8,6 +8,8 @@ Type=simple
 ExecStart=/usr/bin/abls-agent-ups --agent-tech-id=%i
 DynamicUser=yes
 SupplementaryGroups=abls
+StateDirectory=abls-agent-ups/%i
+WorkingDirectory=%S/abls-agent-ups/%i
 Restart=on-failure
 RestartSec=5s
 

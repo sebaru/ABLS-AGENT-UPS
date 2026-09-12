@@ -62,5 +62,8 @@ struct ABLS_UPS_VARS
    JsonNode *Ups_alarm;
  };
 
+ extern struct ABLS_AGENT *Agent;
+ extern struct ABLS_UPS_VARS *Agent_vars;
+
  #endif /* _ABLS_UPS_H_ */
 /*----------------------------------------------------------------------------------------------------------------------------*/
