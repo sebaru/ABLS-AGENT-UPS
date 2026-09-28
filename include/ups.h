@@ -41,6 +41,7 @@ struct ABLS_UPS_VARS
  { UPSCONN_t upsconn;                                                                            /* Connexion au serveur upsd */
    gboolean started;
    time_t next_connexion;
+
 /************************************************************ Analog Input ****************************************************/
    JsonNode *Load;
    JsonNode *Realpower;

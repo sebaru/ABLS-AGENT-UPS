@@ -352,13 +352,11 @@
         { if (!Agent_vars->started)
            { if (!Ups_connect())
               { Ups_disconnect();
-                Agent_set_status ( Agent, "Serveur NUT injoignable" );
                 Agent_vars->next_connexion = now + UPS_RETRY_SEC;
               }
            }
           else
            { Ups_interroger();
-             if (Agent_vars->started) Agent_set_status ( Agent, "Onduleur interrogé" );
              Agent_vars->next_connexion = now + UPS_POLLING_SEC;
            }
         }
