@@ -41,6 +41,7 @@ struct ABLS_UPS_VARS
  { UPSCONN_t upsconn;                                                                            /* Connexion au serveur upsd */
    gboolean started;
    time_t next_connexion;
+
 /************************************************************ Analog Input ****************************************************/
    JsonNode *Load;
    JsonNode *Realpower;
@@ -61,6 +62,9 @@ struct ABLS_UPS_VARS
    JsonNode *Ups_replace_batt;
    JsonNode *Ups_alarm;
  };
+
+ extern struct ABLS_AGENT *Agent;
+ extern struct ABLS_UPS_VARS *Agent_vars;
 
  #endif /* _ABLS_UPS_H_ */
 /*----------------------------------------------------------------------------------------------------------------------------*/
