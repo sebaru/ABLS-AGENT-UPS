@@ -92,7 +92,7 @@
     Mqtt_Send_AI ( Agent, Agent_vars->Output_hz,       0.0, FALSE );
     Mqtt_Send_AI ( Agent, Agent_vars->Output_voltage,  0.0, FALSE );
 
-    Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_NOTICE, "Disconnected from upsd" );
+    Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_NOTICE, "Disconnected from upsd" );
     Agent_send_comm_to_master ( Agent, FALSE );
   }
 /******************************************************************************************************************************/
@@ -119,7 +119,7 @@
     gchar *admin_password = Agent_config_get_string ( Agent, "admin_password" );
 
     if ( upscli_connect( &Agent_vars->upsconn, host, UPS_PORT_TCP, UPSCLI_CONN_TRYSSL ) == -1 )
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING,
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING,
              "Connexion refused by upsd (host='%s' -> %s)", host, (char *)upscli_strerror(&Agent_vars->upsconn) );
        return(FALSE);
      }
@@ -128,16 +128,16 @@
 
     g_snprintf( buffer, sizeof(buffer), "GET UPSDESC %s\n", name );
     if (!Ups_query_one ( buffer, sizeof(buffer) ))
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING,
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING,
              "GET UPSDESC failed (%s)", (char *)upscli_strerror(&Agent_vars->upsconn) );
      }
     else
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_DEBUG, "GET UPSDESC -> %s", buffer ); }
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_DEBUG, "GET UPSDESC -> %s", buffer ); }
 
     if (admin_username && *admin_username)
      { g_snprintf( buffer, sizeof(buffer), "USERNAME %s\n", admin_username );
        if (!Ups_query_one ( buffer, sizeof(buffer) ))
-        { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING,
+        { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING,
                 "USERNAME failed (%s)", (char *)upscli_strerror(&Agent_vars->upsconn) );
         }
      }
@@ -145,12 +145,12 @@
     if (admin_password && *admin_password)
      {  g_snprintf( buffer, sizeof(buffer), "PASSWORD %s\n", admin_password );
        if (!Ups_query_one ( buffer, sizeof(buffer) ))
-        { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING,
+        { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING,
                 "PASSWORD failed (%s)", (char *)upscli_strerror(&Agent_vars->upsconn) );
         }
      }
 
-    Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_NOTICE, "Connected (host='%s', name='%s')", host, name );
+    Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_NOTICE, "Connected (host='%s', name='%s')", host, name );
     return(TRUE);
   }
 /******************************************************************************************************************************/
@@ -167,12 +167,12 @@
 
     g_snprintf( buffer, sizeof(buffer), "INSTCMD %s %s\n", name, nom_cmd );
     if (!Ups_query_one ( buffer, sizeof(buffer) ))
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING,
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING,
              "INSTCMD '%s' failed (%s)", nom_cmd, (char *)upscli_strerror(&Agent_vars->upsconn) );
        Ups_disconnect();
        return;
      }
-    Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_NOTICE, "INSTCMD '%s' -> %s", nom_cmd, buffer );
+    Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_NOTICE, "INSTCMD '%s' -> %s", nom_cmd, buffer );
   }
 /******************************************************************************************************************************/
 /* Ups_get_var: Recupere la valeur d'une variable NUT                                                                         */
@@ -188,14 +188,14 @@
 
     g_snprintf( buffer, sizeof(buffer), "GET VAR %s %s\n", name, nom_var );
     if (!Ups_query_one ( buffer, sizeof(buffer) ))
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING,
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING,
              "GET VAR '%s' failed (%s)", nom_var, (char *)upscli_strerror(&Agent_vars->upsconn) );
        Ups_disconnect ();
        return(NULL);
      }
 
     if ( !strncmp ( buffer, "ERR", 3 ) )                                             /* Detection des erreurs type DATA-STALE */
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_DEBUG, "GET VAR '%s' -> %s", nom_var, buffer );
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_DEBUG, "GET VAR '%s' -> %s", nom_var, buffer );
        return(NULL);
      }
 
@@ -208,7 +208,7 @@
     gchar *fin = strrchr ( debut, '"' );
     if (fin) *fin = '\0';
 
-    Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_DEBUG, "GET VAR '%s' -> '%s'", nom_var, debut );
+    Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_DEBUG, "GET VAR '%s' -> '%s'", nom_var, debut );
     return(debut);
   }
 /******************************************************************************************************************************/
@@ -277,18 +277,18 @@
     gchar *acronyme       = Json_get_string ( msg, "acronyme" );
 
     if (!agent_acronyme)
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_ERR, "Requete mal formée manque mqtt_topic_lvl2" );
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_ERR, "Requete mal formée manque mqtt_topic_lvl2" );
        return;
      }
 
     if (!Json_has_member ( msg, "etat" ))
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_ERR, "Requete mal formée manque etat" );
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_ERR, "Requete mal formée manque etat" );
        return;
      }
 
     gboolean etat = Json_get_bool ( msg, "etat" );
-    Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_NOTICE, "SET_DO '%s:%s'/'%s:%s'=%d",
-          Agent->agent_tech_id, agent_acronyme, tech_id, acronyme, etat );
+    Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_NOTICE, "SET_DO '%s:%s'/'%s:%s'=%d",
+          Agent_get_tech_id ( Agent ), agent_acronyme, tech_id, acronyme, etat );
 
     if (!etat) return;                                                    /* Les commandes onduleur sont des monostables */
 
@@ -301,7 +301,7 @@
     else if (!strcasecmp(agent_acronyme, "START_DEEP_BAT"))  Ups_set_instcmd ( "test.battery.start.deep" );
     else if (!strcasecmp(agent_acronyme, "START_QUICK_BAT")) Ups_set_instcmd ( "test.battery.start.quick" );
     else if (!strcasecmp(agent_acronyme, "STOP_TEST_BAT"))   Ups_set_instcmd ( "test.battery.stop" );
-    else Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_WARNING, "SET_DO '%s' inconnu", agent_acronyme );
+    else Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_WARNING, "SET_DO '%s' inconnu", agent_acronyme );
   }
 /******************************************************************************************************************************/
 /* main: Prend en charge l'agent onduleur                                                                                     */
@@ -314,15 +314,15 @@
     Config_add_parameter ( "admin-username", "USER", "Utilisateur d'administration NUT", CONFIG_STRING );
     Config_add_parameter ( "admin-password", "PASS", "Mot de passe d'administration NUT", CONFIG_STRING );
     Agent = Agent_init ( argv[0], "ups", ABLS_AGENT_UPS_VERSION, sizeof(struct ABLS_UPS_VARS), argc, argv );
-    Agent_vars = Agent->vars;
+    Agent_vars = Agent_get_vars ( Agent );
 
     if (!Agent_config_get_string ( Agent, "host" ))
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_ERR, "ERROR: No host, stopping agent" );
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_ERR, "ERROR: No host, stopping agent" );
        Agent_end(Agent);
      }
 
     if (!Agent_config_get_string ( Agent, "name" ))
-     { Info( __func__, Agent->agent_classe, Agent->agent_tech_id, LOG_ERR, "ERROR: No name, stopping agent" );
+     { Info( __func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_ERR, "ERROR: No name, stopping agent" );
        Agent_end(Agent);
      }
 
@@ -330,20 +330,20 @@
 
     Agent_is_ready ( Agent );
 
-    while(Agent->Agent_run == AGENT_IS_RUNNING)                                              /* On tourne tant que necessaire */
+    while(Agent_is_running ( Agent ))                                              /* On tourne tant que necessaire */
      { Agent_loop ( Agent );                                             /* Loop sur l'agent pour mettre a jour la telemetrie */
 /****************************************************** Ecoute du master ******************************************************/
        JsonNode *mqtt_local_message;
        while ( (mqtt_local_message = Agent_get_mqtt_local_message ( Agent ) ) != NULL )
-        { if (Mqtt_topic_is ( mqtt_local_message, 2, "SET_DO", Agent->agent_tech_id ))
+        { if (Mqtt_topic_is ( mqtt_local_message, 2, "SET_DO", Agent_get_tech_id ( Agent ) ))
            { Ups_SET_DO ( mqtt_local_message ); }
           Json_unref ( mqtt_local_message );
         }
 /****************************************************** Ecoute de l'api *******************************************************/
        JsonNode *mqtt_api_message;
        while ( (mqtt_api_message = Agent_get_mqtt_api_message ( Agent ) ) != NULL )
-        { if ( Mqtt_topic_is ( mqtt_api_message, 4, "+", "AGENT", Agent->agent_tech_id, "TEST" ) )
-           { Info(__func__, Agent->agent_classe, Agent->agent_tech_id, LOG_NOTICE, "Agent Test from API."); }
+        { if ( Mqtt_topic_is ( mqtt_api_message, 4, "+", "AGENT", Agent_get_tech_id ( Agent ), "TEST" ) )
+           { Info(__func__, Agent_get_classe ( Agent ), Agent_get_tech_id ( Agent ), LOG_NOTICE, "Agent Test from API."); }
           Json_unref (mqtt_api_message);
         }
 /****************************************************** Interrogation de l'ups ************************************************/
